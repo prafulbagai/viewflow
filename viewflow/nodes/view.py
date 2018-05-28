@@ -1,3 +1,4 @@
+
 from copy import copy
 
 from django.conf.urls import url
@@ -320,3 +321,21 @@ class View(mixins.PermissionMixin, BaseView):
             return True
 
         return task.owner == user
+
+
+"""
+********* Custom Node. *********.
+"""
+
+
+class ViewNode(View):
+
+    @property
+    def view(self):
+        """View to perform user task."""
+        if not self._view:
+            view_kwargs = self._view_args
+            view_kwargs.update(flow_task=self)
+            view_kwargs.update(flow_class=self.flow_class)
+            self._view = self._view_class.as_view(**view_kwargs)
+        return self._view

@@ -1,3 +1,4 @@
+
 import sys
 import traceback
 import functools
@@ -20,6 +21,17 @@ def flow_start_func(func):
                 activation = flow_task.activation_class()
                 activation.initialize(flow_task, None)
                 return func(activation, *args, **kwargs)
+            # except AttributeError:
+            #     # Custom Code added.
+            #     """
+            #     Used because any method can be a start method, hence need
+            #     to decorate every method with this decorator.
+
+            #     Since, all the methods are decorated, this will bypass
+            #     those methods which are not in the beginning of the flow.
+            #     """
+            #     exc = False
+            #     return func(flow_task, *args, **kwargs)
             except:
                 exc = False
                 if activation.lock:

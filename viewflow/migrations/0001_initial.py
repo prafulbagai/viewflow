@@ -39,6 +39,7 @@ class Migration(migrations.Migration):
                 ('token', viewflow.fields.TokenField(max_length=150, default=viewflow.token.Token('start'))),
                 ('external_task_id', models.CharField(max_length=50, null=True, blank=True, db_index=True)),
                 ('owner_permission', models.CharField(max_length=50, blank=True, null=True)),
+                ('result', django.contrib.postgres.fields.jsonb.JSONField(default={})),
                 ('owner', models.ForeignKey(to=settings.AUTH_USER_MODEL, blank=True, null=True, on_delete=django.db.models.deletion.CASCADE)),
                 ('previous', models.ManyToManyField(to='viewflow.Task', related_name='leading')),
                 ('process', models.ForeignKey(to='viewflow.Process', on_delete=django.db.models.deletion.CASCADE)),

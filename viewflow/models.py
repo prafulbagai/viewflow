@@ -5,6 +5,7 @@ from django.db import models
 from django.template import Template, Context
 from django.utils.translation import ugettext_lazy as _
 from django.utils.encoding import python_2_unicode_compatible, force_text
+from django.contrib.postgres.fields import JSONField
 
 from .activation import STATUS, STATUS_CHOICES
 from .exceptions import FlowRuntimeError
@@ -163,6 +164,7 @@ class Task(AbstractTask):
     owner_permission = models.CharField(_('Permission'), max_length=255, blank=True, null=True)
 
     comments = models.TextField(_('Comments'), blank=True, null=True)
+    result = JSONField(default={})
 
     class Meta:  # noqa D101
         verbose_name = _('Task')
