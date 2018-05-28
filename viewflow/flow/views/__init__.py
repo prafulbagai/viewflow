@@ -10,7 +10,7 @@ from .list import (
 from .start import StartFlowMixin, CreateProcessView
 from .task import (
     FlowMixin, FlowViewMixin, UpdateProcessView,
-    AssignTaskView, UnassignTaskView
+    AssignTaskView, UnassignTaskView, BaseFlowView
 )
 from .utils import get_next_task_url
 

@@ -1,10 +1,14 @@
+
 from __future__ import unicode_literals
 
-from django.utils.six.moves.urllib.parse import quote as urlquote
+from urllib.parse import urlencode
 
+from rest_framework.views import APIView
+
+from django.utils.six.moves.urllib.parse import quote as urlquote
 from django.core.exceptions import PermissionDenied
-from django.http import HttpResponseRedirect
-from django.shortcuts import redirect
+from django.http import HttpResponseRedirect, HttpResponse
+from django.shortcuts import redirect, get_object_or_404
 from django.views import generic
 from django.utils.decorators import method_decorator
 from django.utils.http import is_safe_url
@@ -14,6 +18,8 @@ from ...decorators import flow_view
 from .actions import BaseTaskActionView
 from .mixins import MessageUserMixin
 from .utils import get_next_task_url
+
+from ...activation import STATUS
 
 
 class BaseFlowMixin(object):
@@ -212,3 +218,89 @@ class UnassignTaskView(BaseTaskActionView):
         """Unassign the task from the current owner."""
         self.activation.unassign()
         self.success(_('Task {task} has been unassigned.'))
+
+
+# ################# Custom Flow View ################### #########
+
+
+class BaseFlowView(APIView, FlowViewMixin):
+    flow_task = None
+    flow_class = None
+
+    def cancel(self, *args, **kwargs):
+        task = self.activation.task
+        if task.status == STATUS.DONE:
+            process = self.activation.process
+            process.status = STATUS.NEW
+            process.finished = None
+            process.save()
+            return process.task_set.filter(id__gte=task.id) \
+                                   .update(status=STATUS.CANCELED)
+        else:
+            return
+
+    def activate(self, *args, **kwargs):
+        return self.flow_task.activate(self.activation,
+                                       self.activation.task.token)
+
+    def dispatch(self, request, *args, **kwargs):
+        flow_task = self.flow_task
+        flow_class = self.flow_class
+
+        params = request.GET.get
+        task_pk = params('task')
+        process_pk = params('process')
+
+        if not (task_pk and process_pk):
+            return super(BaseFlowView, self).dispatch(request, flow_class,
+                                                      flow_task, process_pk,
+                                                      task_pk, **kwargs)
+
+        query_params = request.GET.dict()
+        lock = flow_task.flow_class.lock_impl(flow_class.instance)
+        with lock(flow_class, process_pk):
+            task = get_object_or_404(flow_task.flow_class.task_class._default_manager,
+                                     pk=task_pk, process_id=process_pk)
+            activation = flow_task.activation_class()
+            activation.initialize(flow_task, task)
+
+            request.activation = activation
+            request.process = activation.process
+            request.task = activation.task
+
+        self.activation = request.activation
+
+        if params('cancel'):
+            if self.cancel():
+                activation = self.activate()
+                new_task = activation.task
+                query_params['task'] = new_task.id
+                new_task_url = '{}?{}'.format(request.path,
+                                              urlencode(query_params))
+                return HttpResponse(new_task_url)
+            else:
+                return HttpResponse('Error in cancellation')
+
+        if params('redo') and self.cancel():
+            task_activation = self.activate()
+            task_pk = task_activation.task.pk
+            activation = flow_task.activation_class()
+            activation.initialize(flow_task, task_activation.task)
+            self.activation = activation
+            request.task = activation.task
+            request.activation = activation
+
+        if self.activation.assign.can_proceed():
+            self.activation.assign()
+
+        if not self.activation.prepare.can_proceed():
+            return HttpResponse('Error in activation prepare')
+
+        if not self.activation.has_perm(request.user):
+            return HttpResponse('Error in activation permission')
+
+        self.activation.prepare(request.POST or None)
+
+        return super(BaseFlowView, self).dispatch(request, flow_class,
+                                                  flow_task, process_pk,
+                                                  task_pk, **kwargs)
